@@ -94,16 +94,11 @@ if start_button and url_input:
     options.add_argument("user-agent=Mozilla/5.0")
     options.add_argument("--remote-debugging-port=9222")
 
-    # ✅ Gunakan WebDriverManager untuk menginstal ChromeDriver yang kompatibel
-    try:
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=options)
-        driver.get("https://www.tokopedia.com/")
-        time.sleep(3)
-        print("✅ Selenium berjalan dengan sukses!")
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=options)
+    driver.get(formatted_url)
+    time.sleep(3)
+    print("✅ Selenium berjalan dengan sukses!")    
 
     data = []
     max_reviews = 300
@@ -118,7 +113,7 @@ if start_button and url_input:
     while reviews_scraped < max_reviews:
         status_placeholder.markdown(f"**📄 Mengambil halaman {page_number}...**")
         
-        scroll_down()  # ⬇️ Scroll ke bawah sebelum mengambil data
+        scroll_down()  
         soup = BeautifulSoup(driver.page_source, "html.parser")
         containers = soup.findAll('div', attrs={'class': 'css-1k41fl7'})
 

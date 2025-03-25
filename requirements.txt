@@ -9,3 +9,4 @@ webdriver-manager
 plotly
 requests
 lxml
+webdriver-manager

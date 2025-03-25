@@ -2,7 +2,7 @@ streamlit
 pandas
 torch
 transformers
-pickle5  
+pickle
 gdown
 beautifulsoup4
 selenium

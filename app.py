@@ -91,9 +91,10 @@ if start_button and url_input:
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_argument("user-agent=Mozilla/5.0")
 
-    service = Service()
+    # ✅ Gunakan WebDriverManager untuk otomatis mengunduh ChromeDriver
+    service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=options)
-    driver.get(formatted_url)
+    driver.get("https://www.tokopedia.com/")
     time.sleep(3)
 
     data = []

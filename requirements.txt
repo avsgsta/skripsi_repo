@@ -10,3 +10,6 @@ plotly
 requests
 lxml
 webdriver-manager
+undetected-chromedriver
+
+

@@ -5,44 +5,40 @@ import torch
 import pickle
 import re
 import os
-import requests
-import undetected_chromedriver as uc
-from io import BytesIO
+import gdown
 from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from transformers import AutoTokenizer
 import plotly.express as px
 from urllib.parse import urlparse, urlunparse
-import asyncio  # Hindari event loop error di Python 3.12+
 
 st.set_page_config(page_title="Detection Fake Review Tokopedia", page_icon="🛒", layout="wide")
 
-# 🔗 Google Drive File ID untuk Model
+# 🔗 Ganti dengan ID file Google Drive kamu
 FILE_ID = "15NHe3e95pLEmFEATvwbRK6_7dYcz-Vrv"
+MODEL_PATH = "model_optimized.pkl"
 MODEL_TOKENIZER = "cahya/bert-base-indonesian-522M"
 
-# 🔄 Load model langsung dari Google Drive tanpa menyimpan ke disk
-@st.cache_resource
-def load_model_from_drive():
-    GDRIVE_URL = f"https://drive.google.com/uc?export=download&id={FILE_ID}"
-    response = requests.get(GDRIVE_URL, stream=True)
-    response.raise_for_status()
-    model_data = BytesIO(response.content)
-    return pickle.load(model_data)
+# 🔄 Download Model jika belum ada
+if not os.path.exists(MODEL_PATH):
+    print("🚀 Mengunduh model dari Google Drive...")
+    gdown.download(f"https://drive.google.com/uc?id={FILE_ID}", MODEL_PATH, quiet=False)
 
 # ✅ Load Model
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_TOKENIZER)
 
-try:
-    model = load_model_from_drive()
-    model.to(device)
-    model.eval()
-    st.success("✅ Model berhasil dimuat dari Google Drive!")
-except Exception as e:
-    st.error(f"❌ Gagal memuat model: {e}")
+with open(MODEL_PATH, "rb") as f:
+    model = pickle.load(f)
+
+model.to(device)
+model.eval()
 
 def predict_review_label(review, image_url=None):
     if is_emoji_only(review):
@@ -61,7 +57,7 @@ def predict_review_label(review, image_url=None):
     return "Fake" if prediction == 1 else "Real"
 
 def is_emoji_only(text):
-    emoji_pattern = re.compile(r"^[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F700-\U0001F77F]+$")
+    emoji_pattern = re.compile(r"^[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F700-\U0001F77F]+$") 
     return bool(emoji_pattern.match(text))
 
 def clean_url(url):
@@ -89,22 +85,25 @@ if start_button and url_input:
     progress_bar = st.progress(0)
     status_placeholder = st.empty()
 
-    options = uc.ChromeOptions()
-    options.add_argument("--headless")
+    options = webdriver.ChromeOptions()
+    options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-gpu")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_argument("user-agent=Mozilla/5.0")
+    options.add_argument("--remote-debugging-port=9222")
 
-    # ✅ Gunakan undetected_chromedriver untuk menghindari deteksi bot
+    # ✅ Gunakan WebDriverManager untuk menginstal ChromeDriver yang kompatibel
     try:
-        driver = uc.Chrome(options=options)
-        driver.get(formatted_url)
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=options)
+        driver.get("https://www.tokopedia.com/")
         time.sleep(3)
+        print("✅ Selenium berjalan dengan sukses!")
     except Exception as e:
-        st.error(f"❌ Gagal menjalankan Selenium: {e}")
-        driver.quit()
+        print(f"❌ Error: {e}")
+        
 
     data = []
     max_reviews = 300
@@ -132,7 +131,7 @@ if start_button and url_input:
             try:
                 user = container.find('span', class_='name').text
                 review = container.find('span', attrs={'data-testid': 'lblItemUlasan'}).text
-                rating_stars = container.find_all('svg', attrs={'fill': 'var(--YN300, #FFD45F)'})
+                rating_stars = container.find_all('svg', attrs={'fill': 'var(--YN300, #FFD45F)'} )
                 rating = len(rating_stars)
                 image_tag = container.find('img', attrs={'data-testid': 'imgItemPhotoulasan'})
                 image_url = image_tag['src'] if image_tag else None
@@ -170,8 +169,28 @@ if start_button and url_input:
 
 if st.session_state.get("scraping_done"):
     df = st.session_state["scraped_data"]
+    real_count = df[df["Kategori"] == "Real"].shape[0]
+    fake_count = df[df["Kategori"] == "Fake"].shape[0]
+    total_reviews = real_count + fake_count
+    real_percentage = (real_count / total_reviews) * 100 if total_reviews > 0 else 0
+    
+    fig = px.pie(
+        names=["Real", "Fake"],
+        values=[real_count, fake_count],
+        title="Distribusi Ulasan Real vs Fake",
+        color_discrete_sequence=["blue", "red"]
+    )
+    
     st.subheader("📊 Ringkasan Analisis")
+    st.plotly_chart(fig)
     st.dataframe(df)
+    
+    if real_percentage >= 70:
+        st.success(f"✅ Produk ini **layak dibeli** (Real Reviews: {real_percentage:.2f}%)")
+    elif 50 <= real_percentage < 70:
+        st.warning(f"⚠️ Produk ini **perlu dipertimbangkan** (Real Reviews: {real_percentage:.2f}%)")
+    else:
+        st.error(f"❌ Produk ini **tidak layak dibeli** (Real Reviews: {real_percentage:.2f}%)")
     
     csv_file = df.to_csv(index=False).encode("utf-8")
     st.download_button("📥 Unduh CSV", data=csv_file, file_name="tokopedia_reviews.csv", mime="text/csv")

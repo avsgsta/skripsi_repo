@@ -17,6 +17,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from transformers import AutoTokenizer
 import plotly.express as px
 from urllib.parse import urlparse, urlunparse
+import undetected_chromedriver as uc
 
 st.set_page_config(page_title="Detection Fake Review Tokopedia", page_icon="🛒", layout="wide")
 
@@ -85,8 +86,8 @@ if start_button and url_input:
     progress_bar = st.progress(0)
     status_placeholder = st.empty()
 
-    options = webdriver.ChromeOptions()
-    options.add_argument("--headless=new")
+    options = uc.ChromeOptions()
+    options.headless = True  # Mode headless untuk Streamlit Cloud
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-gpu")
     options.add_argument("--disable-dev-shm-usage")
@@ -94,11 +95,15 @@ if start_button and url_input:
     options.add_argument("user-agent=Mozilla/5.0")
     options.add_argument("--remote-debugging-port=9222")
 
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=options)
-    driver.get(formatted_url)
-    time.sleep(3)
-    print("✅ Selenium berjalan dengan sukses!")    
+    # ✅ Inisialisasi WebDriver dengan mekanisme error handling
+    try:
+        driver = uc.Chrome(options=options)
+        driver.get(formatted_url)
+        time.sleep(3)  # Tunggu loading halaman
+        st.success("✅ WebDriver berhasil dijalankan!")
+    except Exception as e:
+        st.error(f"❌ Gagal menjalankan Selenium: {e}")
+        driver = None  # Hindari error jika driver gagal dibuat 
 
     data = []
     max_reviews = 300
